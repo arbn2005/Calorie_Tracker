@@ -12,8 +12,7 @@ import {
   getRecentFoods,
   logFood,
   searchFoods,
-} from "../db/data";
-import { useTranslation } from "../i18n";
+} from "../db/data";import { useTranslation } from "../i18n";
 import { mealForTime } from "../lib/date";
 import { getLastQty, setLastQty } from "../lib/memory";
 import { calculateTargets } from "../lib/goals";
@@ -29,6 +28,7 @@ import type {
 export type Flow =
   | { step: "browse"; meal?: MealType }
   | { step: "scan" }
+  | { step: "quick" }
   | {
       step: "quantity";
       food: FoodWithMeta;
@@ -142,7 +142,16 @@ export function AddSheet({ flow, profile, onClose, onPersist }: AddSheetProps) {
               onPick={(food) => openQuantity(food)}
               onScan={() => setStep("scan")}
               onManual={() => openManual()}
+              onQuick={() => setStep("quick")}
               onRecipe={() => setStep("recipe")}
+            />
+          ) : null}
+
+          {step === "quick" ? (
+            <QuickListPanel
+              meal={meal}
+              onMeal={setMeal}
+              onPersist={() => void handlePersist()}
             />
           ) : null}
 
@@ -241,11 +250,13 @@ function BrowsePanel({
   onPick,
   onScan,
   onManual,
+  onQuick,
   onRecipe,
 }: {
   onPick: (food: FoodWithMeta) => void;
   onScan: () => void;
   onManual: () => void;
+  onQuick: () => void;
   onRecipe: () => void;
 }) {
   const { t } = useTranslation();
@@ -388,6 +399,9 @@ function BrowsePanel({
       )}
 
       <div className="button-row">
+        <button type="button" className="link-btn" onClick={onQuick}>
+          {t("add.quickOpen")}
+        </button>
         <button type="button" className="link-btn" onClick={onManual}>
           {t("add.manualOpen")}
         </button>
@@ -1221,6 +1235,273 @@ function RecipePanel({
         disabled={saving || !ingredients.length}
       >
         {saving ? t("common.saving") : t("add.saveRecipe")}
+      </button>
+    </>
+  );
+}
+
+/* -------------------------------- meal list -------------------------------- */
+
+type QuickUnit = "g" | "kg" | "oz";
+
+const QUICK_UNIT_GRAMS: Record<QuickUnit, number> = {
+  g: 1,
+  kg: 1000,
+  oz: 28.35,
+};
+
+const QUICK_UNITS: QuickUnit[] = ["g", "kg", "oz"];
+
+interface QuickRow {
+  key: string;
+  name: string;
+  kcal100: string;
+  amount: string;
+  unit: QuickUnit;
+  category: FoodCategory;
+}
+
+let quickRowSeq = 0;
+
+function newQuickRow(): QuickRow {
+  quickRowSeq += 1;
+  return {
+    key: `q-${quickRowSeq}`,
+    name: "",
+    kcal100: "",
+    amount: "100",
+    unit: "g",
+    category: "grains",
+  };
+}
+
+function QuickListPanel({
+  meal,
+  onMeal,
+  onPersist,
+}: {
+  meal: MealType;
+  onMeal: (meal: MealType) => void;
+  onPersist: () => void;
+}) {
+  const { t } = useTranslation();
+  const [rows, setRows] = useState<QuickRow[]>(() => [newQuickRow()]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function patch(key: string, changes: Partial<QuickRow>) {
+    setRows((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...changes } : row)),
+    );
+  }
+
+  function rowGrams(row: QuickRow): number {
+    return parseNumber(row.amount, 0) * QUICK_UNIT_GRAMS[row.unit];
+  }
+
+  function rowKcal(row: QuickRow): number {
+    return (parseNumber(row.kcal100, 0) * rowGrams(row)) / 100;
+  }
+
+  async function save() {
+    const invalid = rows.some(
+      (row) =>
+        !row.name.trim() ||
+        !(parseNumber(row.kcal100, 0) > 0) ||
+        !(rowGrams(row) > 0),
+    );
+    if (invalid) {
+      setError(t("add.quickIncomplete"));
+      return;
+    }
+    setSaving(true);
+    try {
+      for (const row of rows) {
+        const food = await createFood({
+          name: row.name.trim(),
+          cuisine: "Other",
+          category: row.category,
+          source: "custom",
+          nutrients: {
+            kcal: parseNumber(row.kcal100, 0),
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+            sugar: 0,
+            sodium: 0,
+          },
+          servings: [],
+        });
+        await logFood({
+          food,
+          quantityG: rowGrams(row),
+          mealType: meal,
+        });
+      }
+      onPersist();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSaving(false);
+    }
+  }
+
+  const totalKcal = rows.reduce((sum, row) => sum + rowKcal(row), 0);
+
+  return (
+    <>
+      <div className="sheet-head">
+        <div>
+          <h2>{t("add.quickTitle")}</h2>
+          <p className="mono">{t("add.quickHint")}</p>
+        </div>
+      </div>
+
+      <div className="quick-list">
+        {rows.map((row, index) => (
+          <div className="quick-row" key={row.key}>
+            <div className="quick-row-head">
+              <input
+                type="text"
+                value={row.name}
+                onChange={(event) =>
+                  patch(row.key, { name: event.target.value })
+                }
+                placeholder={t("add.namePlaceholder")}
+                aria-label={`${t("common.name")} ${index + 1}`}
+                autoComplete="off"
+              />
+              {rows.length > 1 ? (
+                <button
+                  type="button"
+                  className="icon-btn press"
+                  aria-label={`${t("add.remove")} ${index + 1}`}
+                  onClick={() =>
+                    setRows((current) =>
+                      current.filter((entry) => entry.key !== row.key),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              ) : (
+                <span aria-hidden="true" />
+              )}
+            </div>
+            <div className="quick-cols">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={row.kcal100}
+                onChange={(event) =>
+                  patch(row.key, { kcal100: event.target.value })
+                }
+                placeholder={t("add.per100gShort")}
+                aria-label={`${t("nutrient.kcal")} ${t("add.per100gShort")} ${index + 1}`}
+                className="mono"
+              />
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={row.amount}
+                onChange={(event) =>
+                  patch(row.key, { amount: event.target.value })
+                }
+                aria-label={`${t("common.quantity")} ${index + 1}`}
+                className="mono"
+              />
+              <select
+                value={row.unit}
+                onChange={(event) =>
+                  patch(row.key, { unit: event.target.value as QuickUnit })
+                }
+                aria-label={`${t("units.title")} ${index + 1}`}              >
+                {QUICK_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {t(`units.${unit}Label`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="quick-meta">
+              <select
+                value={row.category}
+                onChange={(event) =>
+                  patch(row.key, {
+                    category: event.target.value as FoodCategory,
+                  })
+                }
+                aria-label={`${t("common.category")} ${index + 1}`}
+                className="quick-cat"
+              >
+                {CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {t(`categories.${category}`)}
+                  </option>
+                ))}
+              </select>
+              <span className="mono muted">
+                {rowKcal(row) > 0
+                  ? `${round(rowKcal(row), 0)} ${t("common.kcal")}`
+                  : ""}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="button-row">
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => setRows((current) => [...current, newQuickRow()])}
+        >
+          {t("add.addRow")}
+        </button>
+      </div>
+
+      <div className="chip-row">
+        {MEALS.map((item) => (
+          <button
+            type="button"
+            key={item}
+            className={`chip ${meal === item ? "active" : ""}`}
+            onClick={() => onMeal(item)}
+          >
+            {t(`meals.${item}`)}
+          </button>
+        ))}
+      </div>
+
+      <p className="mono muted small">
+        {t("add.quickTotal", {
+          count: rows.length,
+          kcal: round(totalKcal, 0),
+        })}
+      </p>
+
+      {error ? <p className="error-text">{error}</p> : null}
+
+      <button
+        type="button"
+        className="btn btn-primary btn-block press"
+        onClick={() => void save()}
+        disabled={saving}
+      >
+        {saving
+          ? t("common.saving")
+          : rows.length === 1
+            ? t("add.logAllOne", {
+                meal: t(`meals.${meal}`),
+              })
+            : t("add.logAllTo", {
+                count: rows.length,
+                meal: t(`meals.${meal}`),
+              })}
       </button>
     </>
   );

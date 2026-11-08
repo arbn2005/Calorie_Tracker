@@ -1300,6 +1300,95 @@ a {
   gap: var(--s2) var(--s4);
 }
 
+/* quick meal list (multi-food entry) */
+.quick-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+}
+
+.quick-row-head {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.quick-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 92px;
+  gap: var(--s2);
+}
+
+.quick-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.quick-row input,
+.quick-row select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  background: var(--surface);
+  border: var(--rule-thin) solid var(--rule-soft);
+  border-radius: var(--radius);
+  font-size: 1rem;
+}
+
+.quick-row input.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  text-align: right;
+}
+
+.quick-row input:focus,
+.quick-row select:focus {
+  outline: 3px solid var(--saffron);
+  outline-offset: 0;
+  border-color: var(--rule);
+}
+
+.quick-row input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.quick-row input[type="number"]::-webkit-outer-spin-button,
+.quick-row input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.quick-row .quick-cat {
+  max-width: 190px;
+  font-size: 0.875rem;
+}
+
+.quick-row .icon-btn {
+  color: var(--muted);
+}
+
+@media (max-width: 360px) {
+  .quick-cols {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+
+  .quick-cols select {
+    grid-column: 1 / -1;
+  }
+}
+
 .sub-card {
   border: var(--rule-thin) solid var(--rule-soft);
   border-radius: var(--radius);
