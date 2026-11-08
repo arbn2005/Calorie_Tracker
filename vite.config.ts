@@ -33,6 +33,16 @@ export default defineConfig({
             type: "image/png",
           },
           {
+            src: "/icons/icon-144.png",
+            sizes: "144x144",
+            type: "image/png",
+          },
+          {
+            src: "/icons/icon-96.png",
+            sizes: "96x96",
+            type: "image/png",
+          },
+          {
             src: "/icons/icon-maskable-512.png",
             sizes: "512x512",
             type: "image/png",

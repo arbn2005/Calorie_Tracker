@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Daily Label icon: paper sheet, ink label rules, condensed numeral, saffron foot -->
+  <rect width="512" height="512" fill="#f4efe4"/>
+  <rect x="0" y="74" width="512" height="40" fill="#16140f"/>
+  <rect x="56" y="132" width="400" height="8" fill="#16140f"/>
+  <text x="256" y="400"
+        font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif"
+        font-weight="800"
+        font-size="270"
+        fill="#16140f"
+        text-anchor="middle">0</text>
+  <text x="256" y="462"
+        font-family="IBM Plex Mono, Menlo, monospace"
+        font-size="34"
+        letter-spacing="6"
+        fill="#16140f"
+        text-anchor="middle">kcal</text>
+  <rect x="0" y="488" width="512" height="24" fill="#f0a202"/>
+</svg>
