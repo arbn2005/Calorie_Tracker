@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   plugins: [
+    basicSsl(),
     react(),
     VitePWA({
       registerType: "autoUpdate",
@@ -13,8 +15,8 @@ export default defineConfig({
         short_name: "Calories",
         description:
           "Private, offline calorie and nutrient tracker. All data stays on your device.",
-        theme_color: "#16a34a",
-        background_color: "#f8fafc",
+        theme_color: "#f4efe4",
+        background_color: "#f4efe4",
         display: "standalone",
         orientation: "portrait-primary",
         start_url: "/",
