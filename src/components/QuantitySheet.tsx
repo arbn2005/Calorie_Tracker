@@ -9,6 +9,7 @@ import { NutrientGrid } from "./NutrientGrid";
 interface QuantitySheetProps {
   food: FoodWithMeta;
   initialMeal: MealType;
+  initialUnitName?: string;
   onClose: () => void;
   onLogged: () => void;
 }
@@ -22,6 +23,7 @@ interface UnitOption {
 export function QuantitySheet({
   food,
   initialMeal,
+  initialUnitName,
   onClose,
   onLogged,
 }: QuantitySheetProps) {
@@ -51,8 +53,16 @@ export function QuantitySheet({
     return list;
   }, [food, t]);
 
-  const [unitKey, setUnitKey] = useState("g");
-  const [amount, setAmount] = useState("100");
+  const initialUnit = useMemo(
+    () =>
+      initialUnitName
+        ? units.find((item) => item.key === `s:${initialUnitName}`)
+        : undefined,
+    [initialUnitName, units],
+  );
+
+  const [unitKey, setUnitKey] = useState(initialUnit?.key ?? "g");
+  const [amount, setAmount] = useState(initialUnit ? "1" : "100");
   const [meal, setMeal] = useState<MealType>(initialMeal);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

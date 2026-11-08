@@ -257,6 +257,7 @@
   "profile.dangerTitle": "Danger zone",
   "profile.reset": "Delete all data",
   "profile.resetConfirm": "This deletes every food, log entry and profile on this device. Continue?",
+  "profile.resetDone": "All data on this device has been deleted.",
   "profile.disclaimer": "This app gives estimates only and is not medical advice.",
   "profile.about": "About",
   "profile.version": "Version {{version}}",
