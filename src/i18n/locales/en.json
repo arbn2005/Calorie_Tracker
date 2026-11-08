@@ -281,5 +281,6 @@
   "units.kgLabel": "kg",
   "units.ozLabel": "oz",
   "add.mealCta": "Add a whole meal, food by food",
-  "add.mealCtaHint": "e.g. rice + rasam + buttermilk with pickle — name each food with its weight and log them together"
+  "add.mealCtaHint": "e.g. rice + rasam + buttermilk with pickle — name each food with its weight and log them together",
+  "add.quickTotalOne": "1 food · {{kcal}} kcal"
 }

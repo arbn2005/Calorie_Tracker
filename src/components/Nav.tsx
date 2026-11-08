@@ -43,7 +43,7 @@ export function Nav({ screen, onNavigate, onAdd }: NavProps) {
         <button
           type="button"
           className="nav-add press"
-          onClick={onAdd}
+          onClick={() => onAdd()}
           aria-label={t("add.title")}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">

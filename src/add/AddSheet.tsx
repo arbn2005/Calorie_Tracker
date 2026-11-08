@@ -82,7 +82,7 @@ export function AddSheet({ flow, profile, onClose, onPersist }: AddSheetProps) {
     } else if (flow.step === "manual") {
       setBarcodeSeed(flow.barcode);
       setQuantity(null);
-    } else if (flow.step === "browse" && flow.meal) {
+    } else if (flow.step === "browse" && typeof flow.meal === "string") {
       setMeal(flow.meal);
     }
   }, [flow]);
@@ -318,7 +318,7 @@ function BrowsePanel({
       <div className="sheet-head">
         <div>
           <h2>{t("add.title")}</h2>
-          <p className="mono">{t("add.sheetHint")}</p>
+          <p className="sheet-caption">{t("add.sheetHint")}</p>
         </div>
       </div>
 
@@ -548,11 +548,11 @@ export function QuantityPanel({
       <div className="sheet-head">
         <div>
           <h2>{food.name}</h2>
-          <p className="mono">
+          <p className="sheet-caption">
             {food.brand ? `${food.brand} · ` : ""}
             {t(`cuisines.${food.cuisine.toLowerCase()}`)} ·{" "}
             {t(`categories.${food.category}`)} ·{" "}
-            {round(food.kcal, 0)} / 100 g
+            {round(food.kcal, 0)} {t("common.per100gShort")}
           </p>
         </div>
       </div>
@@ -663,7 +663,7 @@ export function QuantityPanel({
           </div>
         </div>
         {mode === "packet" ? (
-          <p className="mono muted small">
+          <p className="sheet-caption">
             {t("add.packetConsequence", {
               kcal: Math.round((food.kcal * food.packetGrams!) / 100),
               percent: packetPct,
@@ -720,7 +720,7 @@ function ScanPanel({
       <div className="sheet-head">
         <div>
           <h2>{t("add.scanTitle")}</h2>
-          <p className="mono">{t("add.scanHint")}</p>
+          <p className="sheet-caption">{t("add.scanHint")}</p>
         </div>
       </div>
 
@@ -868,7 +868,7 @@ function ManualPanel({
       <div className="sheet-head">
         <div>
           <h2>{t("add.manualTitle")}</h2>
-          <p className="mono">{t("add.required")}</p>
+          <p className="sheet-caption">{t("add.required")}</p>
         </div>
       </div>
 
@@ -1083,7 +1083,7 @@ function RecipePanel({
       <div className="sheet-head">
         <div>
           <h2>{t("add.recipeTitle")}</h2>
-          <p className="mono">{t("add.recipeHint")}</p>
+          <p className="sheet-caption">{t("add.recipeHint")}</p>
         </div>
       </div>
 
@@ -1230,7 +1230,7 @@ function RecipePanel({
         ))}
       </div>
 
-      <p className="mono muted small">
+      <p className="sheet-caption">
         {t("add.recipeTotal")}: {round(totalGrams, 0)} {t("common.g")} ·{" "}
         {round(totals.kcal, 0)} {t("common.kcal")} · {t("add.perServing")}:{" "}
         {round(totals.kcal / servingCount, 0)} {t("common.kcal")}
@@ -1363,7 +1363,7 @@ function QuickListPanel({
       <div className="sheet-head">
         <div>
           <h2>{t("add.quickTitle")}</h2>
-          <p className="mono">{t("add.quickHint")}</p>
+          <p className="sheet-caption">{t("add.quickHint")}</p>
         </div>
       </div>
 
@@ -1408,8 +1408,8 @@ function QuickListPanel({
                 onChange={(event) =>
                   patch(row.key, { kcal100: event.target.value })
                 }
-                placeholder={t("add.per100gShort")}
-                aria-label={`${t("nutrient.kcal")} ${t("add.per100gShort")} ${index + 1}`}
+                placeholder={t("common.per100gShort")}
+                aria-label={`${t("nutrient.kcal")} ${t("common.per100gShort")} ${index + 1}`}
                 className="mono"
               />
               <input
@@ -1487,11 +1487,13 @@ function QuickListPanel({
         ))}
       </div>
 
-      <p className="mono muted small">
-        {t("add.quickTotal", {
-          count: rows.length,
-          kcal: round(totalKcal, 0),
-        })}
+      <p className="sheet-caption">
+        {rows.length === 1
+          ? t("add.quickTotalOne", { kcal: round(totalKcal, 0) })
+          : t("add.quickTotal", {
+              count: rows.length,
+              kcal: round(totalKcal, 0),
+            })}
       </p>
 
       {error ? <p className="error-text">{error}</p> : null}

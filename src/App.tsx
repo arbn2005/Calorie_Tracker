@@ -173,8 +173,7 @@ export default function App() {
         <hr className="rule-heavy" />
         <div className="boot-error">
           <h2>{t("error.loadTitle")}</h2>
-          <p className="chart-hint">{t("error.loadBody")}</p>
-          <p className="mono muted small">{error}</p>
+          <p className="chart-hint">{t("error.loadBody")}</p>          <p className="chart-hint">{error}</p>
           <button
             type="button"
             className="btn btn-primary press"

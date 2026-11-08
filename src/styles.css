@@ -1109,9 +1109,14 @@ a {
   line-height: 1;
 }
 
-.sheet-head .mono {
+.sheet-caption {
   color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  padding-top: 2px;
 }
+
+/* caption under sheet titles: body text, never code-style mono */
 
 /* quantity panel hero */
 .qty-hero {
