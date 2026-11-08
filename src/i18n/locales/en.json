@@ -270,7 +270,6 @@
   "profile.version": "Version {{version}}",
   "error.loadTitle": "Could not load the app",
   "error.loadBody": "The local food database could not be loaded. Check your connection for the first load and try again.",
-  "add.quickOpen": "Log several foods together",
   "add.quickTitle": "Meal list",
   "add.quickHint": "Each food with its weight — all into one meal",
   "add.quickIncomplete": "Every row needs a name, kcal per 100 g and a weight.",
@@ -280,5 +279,7 @@
   "add.logAllOne": "Log this food to {{meal}}",
   "units.title": "Unit",
   "units.kgLabel": "kg",
-  "units.ozLabel": "oz"
+  "units.ozLabel": "oz",
+  "add.mealCta": "Add a whole meal, food by food",
+  "add.mealCtaHint": "e.g. rice + rasam + buttermilk with pickle — name each food with its weight and log them together"
 }

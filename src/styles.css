@@ -1300,6 +1300,17 @@ a {
   gap: var(--s2) var(--s4);
 }
 
+/* prominent whole-meal entry point in the browse panel */
+.meal-cta {
+  padding: var(--s2) 0 var(--s3);
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+  margin-bottom: var(--s3);
+}
+
+.meal-cta .btn {
+  width: 100%;
+}
+
 /* quick meal list (multi-food entry) */
 .quick-list {
   display: flex;

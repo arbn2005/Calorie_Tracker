@@ -82,6 +82,8 @@ export function AddSheet({ flow, profile, onClose, onPersist }: AddSheetProps) {
     } else if (flow.step === "manual") {
       setBarcodeSeed(flow.barcode);
       setQuantity(null);
+    } else if (flow.step === "browse" && flow.meal) {
+      setMeal(flow.meal);
     }
   }, [flow]);
 
@@ -320,6 +322,17 @@ function BrowsePanel({
         </div>
       </div>
 
+      <div className="meal-cta">
+        <button
+          type="button"
+          className="btn btn-primary btn-block press"
+          onClick={onQuick}
+        >
+          {t("add.mealCta")}
+        </button>
+        <p className="chart-hint muted small">{t("add.mealCtaHint")}</p>
+      </div>
+
       <label className="search-box">
         <input
           type="search"
@@ -399,9 +412,6 @@ function BrowsePanel({
       )}
 
       <div className="button-row">
-        <button type="button" className="link-btn" onClick={onQuick}>
-          {t("add.quickOpen")}
-        </button>
         <button type="button" className="link-btn" onClick={onManual}>
           {t("add.manualOpen")}
         </button>
