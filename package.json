@@ -11,10 +11,8 @@
   },
   "dependencies": {
     "@zxing/browser": "^0.1.5",
-    "chart.js": "^4.4.7",
     "dexie": "^4.0.11",
     "react": "^19.0.0",
-    "react-chartjs-2": "^5.2.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {

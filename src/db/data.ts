@@ -428,6 +428,42 @@ export async function deleteLog(id: number): Promise<void> {
   await db.logs.delete(id);
 }
 
+export async function restoreLog(
+  entry: Omit<LogEntry, "id"> & { id?: number },
+): Promise<LogEntry> {
+  const copy = { ...entry };
+  delete copy.id;
+  const id = await db.logs.add(copy as LogEntry);
+  return { ...copy, id };
+}
+
+export async function editLog(
+  id: number,
+  changes: { quantityG?: number; mealType?: MealType; servingLabel?: string },
+): Promise<void> {
+  const entry = await db.logs.get(id);
+  if (!entry) return;
+  const patch: Partial<LogEntry> = {};
+  const quantityG =
+    changes.quantityG != null && changes.quantityG > 0
+      ? changes.quantityG
+      : entry.quantityG;
+  if (quantityG !== entry.quantityG) {
+    const factor = quantityG / entry.quantityG;
+    patch.quantityG = round(quantityG, 1);
+    patch.kcal = round(entry.kcal * factor, 1);
+    patch.protein = round(entry.protein * factor, 1);
+    patch.carbs = round(entry.carbs * factor, 1);
+    patch.fat = round(entry.fat * factor, 1);
+    patch.fiber = round(entry.fiber * factor, 1);
+    patch.sugar = round(entry.sugar * factor, 1);
+    patch.sodium = round(entry.sodium * factor, 0);
+    patch.servingLabel = changes.servingLabel;
+  }
+  if (changes.mealType) patch.mealType = changes.mealType;
+  if (Object.keys(patch).length) await db.logs.update(id, patch);
+}
+
 export async function getLogsForDay(timestamp = Date.now()): Promise<LogEntry[]> {
   const start = startOfDay(timestamp);
   const endDate = new Date(start);

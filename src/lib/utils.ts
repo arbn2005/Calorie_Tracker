@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Language } from "../types";
 
 export function round(value: number, digits = 1): number {
@@ -65,4 +66,45 @@ export function dateStamp(date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
     date.getDate(),
   )}`;
+}
+
+export function tick(): void {
+  navigator.vibrate?.(10);
+}
+
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+export function useCountUp(target: number, durationMs = 400): number {
+  const [value, setValue] = useState(() =>
+    prefersReducedMotion() ? target : 0,
+  );
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      setValue(target);
+      return;
+    }
+    let frame = 0;
+    let cancelled = false;
+    const start = performance.now();
+    const step = (now: number) => {
+      if (cancelled) return;
+      const progress = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - (1 - progress) ** 3;
+      setValue(Math.round((target - 0) * eased));
+      if (progress < 1) {
+        frame = requestAnimationFrame(step);
+      }
+    };
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [target, durationMs]);
+  return value;
 }

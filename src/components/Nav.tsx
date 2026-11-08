@@ -1,10 +1,10 @@
-import type { ReactElement } from "react";
 import { useTranslation } from "../i18n";
 import type { ScreenName } from "../types";
 
 interface NavProps {
   screen: ScreenName;
   onNavigate: (screen: ScreenName) => void;
+  onAdd: () => void;
 }
 
 function TodayIcon() {
@@ -16,66 +16,51 @@ function TodayIcon() {
   );
 }
 
-function AddIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
+function TrendsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />
+      <path d="M3 20L9 12l4 4 8-10" />
+      <path d="M15 6h6v6" />
     </svg>
   );
 }
 
-function ProfileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
-    </svg>
-  );
-}
-
-const ITEMS: {
-  screen: ScreenName;
-  labelKey: string;
-  icon: () => ReactElement;
-}[] = [
-  { screen: "today", labelKey: "nav.today", icon: TodayIcon },
-  { screen: "add", labelKey: "nav.add", icon: AddIcon },
-  { screen: "history", labelKey: "nav.history", icon: HistoryIcon },
-  { screen: "profile", labelKey: "nav.profile", icon: ProfileIcon },
-];
-
-export function Nav({ screen, onNavigate }: NavProps) {
+export function Nav({ screen, onNavigate, onAdd }: NavProps) {
   const { t } = useTranslation();
   return (
-    <nav className="bottom-nav" aria-label="Main navigation">
-      {ITEMS.map((item) => {
-        const Icon = item.icon;
-        const active = screen === item.screen;
-        return (
-          <button
-            key={item.screen}
-            type="button"
-            className={`nav-item ${active ? "active" : ""} ${
-              item.screen === "add" ? "nav-add" : ""
-            }`}
-            onClick={() => onNavigate(item.screen)}
-            aria-current={active ? "page" : undefined}
-          >
-            <span className="nav-icon">
-              <Icon />
-            </span>
-            <span className="nav-label">{t(item.labelKey)}</span>
-          </button>
-        );
-      })}
+    <nav className="bottom-nav" aria-label={t("nav.title")}>
+      <div className="nav-inner">
+        <button
+          type="button"
+          className={`nav-item press ${screen === "today" ? "active" : ""}`}
+          onClick={() => onNavigate("today")}
+          aria-current={screen === "today" ? "page" : undefined}
+        >
+          <TodayIcon />
+          <span>{t("nav.today")}</span>
+        </button>
+
+        <button
+          type="button"
+          className="nav-add press"
+          onClick={onAdd}
+          aria-label={t("add.title")}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          className={`nav-item press ${screen === "trends" ? "active" : ""}`}
+          onClick={() => onNavigate("trends")}
+          aria-current={screen === "trends" ? "page" : undefined}
+        >
+          <TrendsIcon />
+          <span>{t("nav.trends")}</span>
+        </button>
+      </div>
     </nav>
   );
 }

@@ -94,7 +94,7 @@ export interface NutritionTargets extends Nutrients {
   tdee: number;
 }
 
-export type ScreenName = "today" | "add" | "history" | "profile";
+export type ScreenName = "today" | "trends" | "settings";
 
 export interface SeedFood {
   id: string;
