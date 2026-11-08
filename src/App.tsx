@@ -64,6 +64,50 @@ export default function App() {
 
   const bump = useCallback(() => setVersion((value) => value + 1), []);
 
+  /* --- Android back gesture / browser back: history-backed UI stack ---
+     One pushed history entry backs "not on the root". Back gesture
+     (popstate) unwinds it; UI-authored closes (sheet button, Escape,
+     drag dismiss, save) consume the same entry via history.back(). */
+  const pushedEntry = useRef<string | null>(null);
+  const expectingPop = useRef(false);
+
+  useEffect(() => {
+    if (expectingPop.current) return;
+    const isRoot = screen === "today" && flow == null;
+    if (!isRoot && pushedEntry.current == null) {
+      const label = flow ? `flow:${flow.step}` : `screen:${screen}`;
+      pushedEntry.current = label;
+      window.history.pushState({ calorieUi: label }, "");
+    }
+  }, [screen, flow]);
+
+  const closeFlow = useCallback(() => {
+    if (pushedEntry.current != null) {
+      pushedEntry.current = null;
+      expectingPop.current = true;
+      window.history.back();
+    }
+    setFlow(null);
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => {
+      if (expectingPop.current) {
+        expectingPop.current = false;
+        return;
+      }
+      if (pushedEntry.current == null) return;
+      pushedEntry.current = null;
+      if (flow != null) {
+        setFlow(null);
+      } else if (screen !== "today") {
+        setScreen("today");
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [flow, screen]);
+
   const reload = useCallback(async () => {
     await loadProfile();
     bump();
@@ -117,7 +161,7 @@ export default function App() {
 
   function handlePersist() {
     tick();
-    setFlow(null);
+    closeFlow();
     bump();
     dismissToast();
   }
@@ -182,7 +226,7 @@ export default function App() {
       <AddSheet
         flow={flow}
         profile={profile}
-        onClose={() => setFlow(null)}
+        onClose={closeFlow}
         onPersist={handlePersist}
       />
 
