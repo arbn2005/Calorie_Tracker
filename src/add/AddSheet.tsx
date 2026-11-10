@@ -12,6 +12,7 @@ import {
   getRecentFoods,
   logFood,
   searchFoods,
+  updateFoodNutrients,
 } from "../db/data";import { useTranslation } from "../i18n";
 import { mealForTime } from "../lib/date";
 import { getLastQty, setLastQty } from "../lib/memory";
@@ -22,6 +23,7 @@ import type {
   FoodCategory,
   FoodWithMeta,
   MealType,
+  Nutrients,
   UserProfile,
 } from "../types";
 
@@ -38,6 +40,19 @@ export type Flow =
     }
   | { step: "manual"; barcode?: string }
   | { step: "recipe" };
+
+/** nutrients the user may correct per 100 g when editing an entry */
+const PER100_FIELDS: Array<{ key: keyof Nutrients; unit: string }> = [
+  { key: "kcal", unit: "kcal" },
+  { key: "protein", unit: "g" },
+  { key: "carbs", unit: "g" },
+  { key: "fat", unit: "g" },
+  { key: "fiber", unit: "g" },
+  { key: "sugar", unit: "g" },
+  { key: "sodium", unit: "mg" },
+];
+
+const fmtPer100 = (value: number) => String(Number(round(value, 2)));
 
 interface AddSheetProps {
   flow: Flow | null;
@@ -468,7 +483,9 @@ export function QuantityPanel({
     [food, t],
   );
 
-  const memory = editId ? null : initial ?? getLastQty(food.id);
+  const memory = editId
+    ? (initial ?? { amount: "100", unitKey: "g" })
+    : (initial ?? getLastQty(food.id));
   const defaultUnit =
     memory?.unitKey && units.some((unit) => unit.key === memory.unitKey)
       ? memory.unitKey
@@ -484,24 +501,43 @@ export function QuantityPanel({
   const [mode, setMode] = useState<"serving" | "packet">("serving");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** edit mode: user-corrected per-100 g values, layered over the food */
+  const [per100, setPer100] = useState<Record<string, string> | null>(null);
 
   const unit = units.find((item) => item.key === unitKey) ?? units[0];
   const amountValue = parseNumber(amount, 0);
   const grams = unit.grams ? amountValue * unit.grams : amountValue;
   const factor = grams / 100;
-  const kcal = food.kcal * factor;
+  /* what the entry will actually be computed from */
+  const effective = useMemo(() => {
+    if (!per100) return food;
+    const merged: FoodWithMeta = { ...food };
+    for (const field of PER100_FIELDS) {
+      const raw = per100[field.key];
+      if (raw != null) merged[field.key] = parseNumber(raw, food[field.key] ?? 0);
+    }
+    return merged;
+  }, [food, per100]);
+  const kcal = effective.kcal * factor;
   const macros = {
-    protein: food.protein * factor,
-    carbs: food.carbs * factor,
-    fat: food.fat * factor,
-    fiber: food.fiber * factor,
-    sugar: food.sugar * factor,
-    sodium: food.sodium * factor,
+    protein: effective.protein * factor,
+    carbs: effective.carbs * factor,
+    fat: effective.fat * factor,
+    fiber: effective.fiber * factor,
+    sugar: effective.sugar * factor,
+    sodium: effective.sodium * factor,
   };
   const packetPct =
     targets.kcal > 0
-      ? Math.round(((food.kcal * (food.packetGrams ?? 0)) / targets.kcal) * 100)
+      ? Math.round(((effective.kcal * (food.packetGrams ?? 0)) / targets.kcal) * 100)
       : 0;
+  const nutrientsTouched =
+    editId != null &&
+    per100 != null &&
+    PER100_FIELDS.some((field) => {
+      const raw = per100[field.key];
+      return raw != null && parseNumber(raw, food[field.key] ?? 0) !== food[field.key];
+    });
 
   function changeUnit(key: string) {
     setUnitKey(key);
@@ -531,7 +567,41 @@ export function QuantityPanel({
           ? undefined
           : `${round(amountValue, 2)} × ${unit.label}`;
       if (editId != null) {
-        await editLog(editId, { quantityG: grams, mealType: meal, servingLabel });
+        /* corrected per-100 g values are saved to the food as well, so the
+           next logs start from the fixed numbers */
+        if (nutrientsTouched && per100) {
+          const merged = { ...food } as FoodWithMeta;
+          for (const field of PER100_FIELDS) {
+            const raw = per100[field.key];
+            merged[field.key] =
+              raw != null ? Math.max(0, parseNumber(raw, food[field.key] ?? 0)) : food[field.key];
+          }
+          await updateFoodNutrients(food.id, {
+            kcal: merged.kcal,
+            protein: merged.protein,
+            carbs: merged.carbs,
+            fat: merged.fat,
+            fiber: merged.fiber,
+            sugar: merged.sugar,
+            sodium: merged.sodium,
+          });
+          await editLog(editId, {
+            quantityG: grams,
+            mealType: meal,
+            servingLabel,
+            nutrientsPer100g: {
+              kcal: merged.kcal,
+              protein: merged.protein,
+              carbs: merged.carbs,
+              fat: merged.fat,
+              fiber: merged.fiber,
+              sugar: merged.sugar,
+              sodium: merged.sodium,
+            },
+          });
+        } else {
+          await editLog(editId, { quantityG: grams, mealType: meal, servingLabel });
+        }
       } else {
         await logFood({ food, quantityG: grams, mealType: meal, servingLabel });
         setLastQty(food.id, { amount, unitKey });
@@ -645,6 +715,42 @@ export function QuantityPanel({
           </button>
         ))}
       </div>
+
+      {editId != null ? (
+        <div className="sub-card per100-edit">
+          <h3>{t("add.per100Title")}</h3>
+          <p className="sheet-caption">{t("add.per100Hint")}</p>
+          <div className="per100-rows">
+            {PER100_FIELDS.map((field) => (
+              <div className="per100-row" key={field.key}>
+                <label htmlFor={`per100-${field.key}`}>
+                  {t(`nutrient.${field.key}`)}
+                </label>
+                <input
+                  id={`per100-${field.key}`}
+                  type="text"
+                  inputMode="decimal"
+                  value={
+                    per100 && per100[field.key] != null
+                      ? per100[field.key]
+                      : fmtPer100(food[field.key] ?? 0)
+                  }
+                  onChange={(event) =>
+                    setPer100({
+                      ...per100,
+                      [field.key]: event.target.value,
+                    })
+                  }
+                  aria-label={`${t(`nutrient.${field.key}`)} · ${field.unit} ${t("common.per100gShort")}`}
+                  className="mono"
+                  autoComplete="off"
+                />
+                <span className="quantity-units">{field.unit}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="sub-card">
         <h3>{t("add.estimated")}</h3>

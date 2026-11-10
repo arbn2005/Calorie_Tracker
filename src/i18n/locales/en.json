@@ -170,7 +170,7 @@
   "add.packetUnknown": "Packet weight is unknown. Enter it to see the whole-packet total.",
   "add.manualTitle": "Enter food values",
   "add.namePlaceholder": "e.g. Homemade paneer curry",
-  "add.per100Title": "Nutrition per 100 g",
+  "add.per100Title": "Values per 100 g",
   "add.servingTitle": "Serving",
   "add.servingName": "Serving name",
   "add.servingNamePlaceholder": "e.g. katori, slice, piece",
@@ -342,5 +342,6 @@
   "assistant.totalKcal": "Total kcal",
   "assistant.vsTarget": "Of daily target",
   "assistant.topFoods": "Most kcal from",
-  "assistant.openTrends": "Open Trends"
+  "assistant.openTrends": "Open Trends",
+  "add.per100Hint": "Correct any value — it is saved to this food and applied to this entry."
 }

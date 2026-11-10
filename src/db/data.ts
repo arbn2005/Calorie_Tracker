@@ -440,7 +440,13 @@ export async function restoreLog(
 
 export async function editLog(
   id: number,
-  changes: { quantityG?: number; mealType?: MealType; servingLabel?: string },
+  changes: {
+    quantityG?: number;
+    mealType?: MealType;
+    servingLabel?: string;
+    /** edited per-100 g food values: entry nutrients are recomputed absolutely */
+    nutrientsPer100g?: Nutrients;
+  },
 ): Promise<void> {
   const entry = await db.logs.get(id);
   if (!entry) return;
@@ -449,20 +455,49 @@ export async function editLog(
     changes.quantityG != null && changes.quantityG > 0
       ? changes.quantityG
       : entry.quantityG;
-  if (quantityG !== entry.quantityG) {
-    const factor = quantityG / entry.quantityG;
+  if (quantityG !== entry.quantityG || changes.nutrientsPer100g) {
+    const factor = quantityG / 100;
+    const per100 = changes.nutrientsPer100g ?? {
+      kcal: entry.kcal / factor,
+      protein: entry.protein / factor,
+      carbs: entry.carbs / factor,
+      fat: entry.fat / factor,
+      fiber: entry.fiber / factor,
+      sugar: entry.sugar / factor,
+      sodium: entry.sodium / factor,
+    };
     patch.quantityG = round(quantityG, 1);
-    patch.kcal = round(entry.kcal * factor, 1);
-    patch.protein = round(entry.protein * factor, 1);
-    patch.carbs = round(entry.carbs * factor, 1);
-    patch.fat = round(entry.fat * factor, 1);
-    patch.fiber = round(entry.fiber * factor, 1);
-    patch.sugar = round(entry.sugar * factor, 1);
-    patch.sodium = round(entry.sodium * factor, 0);
-    patch.servingLabel = changes.servingLabel;
+    patch.kcal = round(per100.kcal * factor, 1);
+    patch.protein = round(per100.protein * factor, 1);
+    patch.carbs = round(per100.carbs * factor, 1);
+    patch.fat = round(per100.fat * factor, 1);
+    patch.fiber = round(per100.fiber * factor, 1);
+    patch.sugar = round(per100.sugar * factor, 1);
+    patch.sodium = round(per100.sodium * factor, 0);
+    if (quantityG !== entry.quantityG) patch.servingLabel = changes.servingLabel;
   }
   if (changes.mealType) patch.mealType = changes.mealType;
   if (Object.keys(patch).length) await db.logs.update(id, patch);
+}
+
+/** Persist corrected per-100 g values on the food itself; future logs use them. */
+export async function updateFoodNutrients(
+  id: string,
+  nutrients: Nutrients,
+): Promise<void> {
+  const food = await db.foods.get(id);
+  if (!food) return;
+  await db.foods.put({
+    ...food,
+    kcal: round(nutrients.kcal, 2),
+    protein: round(nutrients.protein, 2),
+    carbs: round(nutrients.carbs, 2),
+    fat: round(nutrients.fat, 2),
+    fiber: round(nutrients.fiber, 2),
+    sugar: round(nutrients.sugar, 2),
+    sodium: round(nutrients.sodium, 2),
+  });
+  cache = null;
 }
 
 export async function getLogsForDay(timestamp = Date.now()): Promise<LogEntry[]> {

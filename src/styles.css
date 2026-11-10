@@ -1663,6 +1663,43 @@ a {
   color: var(--muted);
 }
 
+/* per-100 g correction rows when editing an entry */
+.per100-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.per100-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+}
+
+.per100-row:last-child {
+  border-bottom: 0;
+}
+
+.per100-row label {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+}
+
+.per100-row input[type="text"] {
+  width: 96px;
+  text-align: right;
+  min-height: 44px;
+}
+
+.per100-row .quantity-units {
+  width: 2.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 /* nutrient readout grid */
 .nutrient-grid {
   display: grid;
