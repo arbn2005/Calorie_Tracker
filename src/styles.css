@@ -1316,50 +1316,114 @@ a {
   width: 100%;
 }
 
-/* separate voice / chat entry points under the whole-meal CTA */
-.entry-modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* assistant page */
+.head-actions {
+  display: flex;
+  gap: var(--s2);
+}
+
+.icon-inline {
+  display: inline-flex;
+  margin-right: var(--s2);
+}
+
+.chat-action {
+  color: var(--saffron);
+  margin-left: var(--s2);
+}
+
+.cmd-text {
+  display: block;
+  margin-bottom: var(--s1);
+}
+
+.chat-edit {
+  min-height: 32px;
+  font-size: 0.8125rem;
+}
+
+.cmd-edit textarea {
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+}
+
+/* pending add rows from a command */
+.cmd-list {
   margin-top: var(--s3);
+}
+
+.cmd-row {
+  padding: var(--s2) 0 var(--s3);
   border-bottom: var(--rule-thin) solid var(--rule-faint);
 }
 
-.entry-mode {
+.cmd-row-line {
   display: flex;
-  flex-direction: column;
+  gap: var(--s2);
   align-items: center;
-  justify-content: center;
-  gap: var(--s1);
-  min-height: 64px;
-  padding: var(--s2);
-  background: none;
-  border: 0;
-  color: var(--ink);
-  cursor: pointer;
+}
+
+.cmd-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.cmd-row input[type="number"] {
+  width: 96px;
+}
+
+.cmd-await {
+  border-left: 3px solid var(--saffron);
+  padding-left: var(--s3);
+}
+
+.cmd-await-caption {
+  color: var(--saffron);
   font-family: var(--font-body);
+  font-size: 0.8125rem;
+  margin-top: var(--s1);
 }
 
-.entry-mode + .entry-mode {
-  border-left: var(--rule-thin) solid var(--rule-faint);
+.cmd-assumption {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin-top: var(--s1);
 }
 
-.entry-mode:hover {
-  background: var(--surface);
+.cmd-portion {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  white-space: nowrap;
 }
 
-.entry-mode:focus-visible {
-  outline: 2px solid var(--saffron);
-  outline-offset: -2px;
+/* query summary block */
+.cmd-summary {
+  margin-top: var(--s3);
 }
 
-.entry-mode:active {
-  background: var(--paper);
+.cmd-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  margin-bottom: var(--s2);
 }
 
-.entry-mode span {
-  font-size: 0.875rem;
+.cmd-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
 }
 
+/* quick meal list (multi-food entry) */
 /* chat: talk to the food assistant */
 .chat-log {
   display: flex;

@@ -17,16 +17,6 @@ import { mealForTime } from "../lib/date";
 import { getLastQty, setLastQty } from "../lib/memory";
 import { calculateTargets } from "../lib/goals";
 import { parseNumber, round } from "../lib/utils";
-import {
-  chatTurn,
-  parseVoice,
-  speechSupported,
-  startListening,
-  type ChatMessage,
-  type ParsedFood,
-  type RecognizerHandle,
-  type VoiceParseResult,
-} from "../lib/voice";
 import type {
   Cuisine,
   FoodCategory,
@@ -39,8 +29,6 @@ export type Flow =
   | { step: "browse"; meal?: MealType }
   | { step: "scan" }
   | { step: "quick" }
-  | { step: "voice" }
-  | { step: "chat" }
   | {
       step: "quantity";
       food: FoodWithMeta;
@@ -79,15 +67,6 @@ export function AddSheet({ flow, profile, onClose, onPersist }: AddSheetProps) {
     initial?: { amount: string; unitKey: string };
   } | null>(null);
   const [barcodeSeed, setBarcodeSeed] = useState<string | undefined>(undefined);
-  const [quickSeed, setQuickSeed] = useState<QuickRow[] | null>(null);
-  const [quickNonce, setQuickNonce] = useState(0);
-
-  function openQuickWith(rows: QuickRow[]) {
-    setQuickSeed(rows);
-    setQuickNonce((value) => value + 1);
-    setStep("quick");
-  }
-
   useEffect(() => {
     if (!flow) return;
     setStep(flow.step);
@@ -166,32 +145,11 @@ export function AddSheet({ flow, profile, onClose, onPersist }: AddSheetProps) {
               onManual={() => openManual()}
               onQuick={() => setStep("quick")}
               onRecipe={() => setStep("recipe")}
-              onVoice={() => setStep("voice")}
-              onChat={() => setStep("chat")}
-            />
-          ) : null}
-
-          {step === "voice" ? (
-            <VoicePanel
-              meal={meal}
-              onMeal={setMeal}
-              onSeedQuick={openQuickWith}
-              onPersist={() => void handlePersist()}
-            />
-          ) : null}
-
-          {step === "chat" ? (
-            <ChatPanel
-              meal={meal}
-              onMeal={setMeal}
-              onPersist={() => void handlePersist()}
             />
           ) : null}
 
           {step === "quick" ? (
             <QuickListPanel
-              key={quickNonce}
-              seedRows={quickSeed}
               meal={meal}
               onMeal={setMeal}
               onPersist={() => void handlePersist()}
@@ -295,16 +253,12 @@ function BrowsePanel({
   onManual,
   onQuick,
   onRecipe,
-  onVoice,
-  onChat,
 }: {
   onPick: (food: FoodWithMeta) => void;
   onScan: () => void;
   onManual: () => void;
   onQuick: () => void;
   onRecipe: () => void;
-  onVoice: () => void;
-  onChat: () => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -377,16 +331,6 @@ function BrowsePanel({
         </button>
         <p className="chart-hint muted small">{t("add.mealCtaHint")}</p>
 
-        <div className="entry-modes">
-          <button type="button" className="entry-mode press" onClick={onVoice}>
-            <MicIcon />
-            <span>{t("add.voiceOpenShort")}</span>
-          </button>
-          <button type="button" className="entry-mode press" onClick={onChat}>
-            <ChatIcon />
-            <span>{t("add.chatOpenShort")}</span>
-          </button>
-        </div>
       </div>
 
       <label className="search-box">
@@ -1306,550 +1250,6 @@ function RecipePanel({
   );
 }
 
-/* ---------------------------------- icons ---------------------------------- */
-
-function MicIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="9" y="2.5" width="6" height="11.5" rx="1" />
-      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
-      <path d="M12 18v3" />
-      <path d="M8.5 21.5h7" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 4.5h16v11h-10.5L4 19.5z" />
-      <path d="M8 8.5h8" />
-      <path d="M8 11.5h5" />
-    </svg>
-  );
-}
-
-/* ---------------------------------- chat ----------------------------------- */
-
-/** Same name seen again ("more rice") grows the existing entry. */
-function mergeFoods(current: ParsedFood[], incoming: ParsedFood[]): ParsedFood[] {
-  const merged = [...current];
-  for (const food of incoming) {
-    const existing = merged.findIndex(
-      (entry) => entry.name.toLowerCase() === food.name.toLowerCase(),
-    );
-    if (existing === -1) merged.push(food);
-    else merged[existing] = { ...merged[existing], grams: merged[existing].grams + food.grams };
-  }
-  return merged;
-}
-
-function ChatPanel({
-  meal,
-  onMeal,
-  onPersist,
-}: {
-  meal: MealType;
-  onMeal: (meal: MealType) => void;
-  onPersist: () => void;
-}) {
-  const { t, language } = useTranslation();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [foods, setFoods] = useState<ParsedFood[]>([]);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const logRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const node = logRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [messages, busy]);
-
-  async function send() {
-    const text = draft.trim();
-    if (!text || busy) return;
-    const history: ChatMessage[] = [...messages, { role: "user", text }];
-    setMessages(history);
-    setDraft("");
-    setBusy(true);
-    setError(null);
-    try {
-      const turn = await chatTurn(history, { mealType: meal, language });
-      setMessages((current) => [
-        ...current,
-        { role: "ai", text: turn.reply || t("add.chatEmptyReply") },
-      ]);
-      if (turn.meal) onMeal(turn.meal);
-      if (turn.foods.length) {
-        setFoods((current) => mergeFoods(current, turn.foods));
-      }
-    } catch {
-      setError(t("add.chatFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function save() {
-    if (saving || !foods.length) return;
-    setSaving(true);
-    try {
-      for (const food of foods) {
-        const created = await createFood({
-          name: food.name,
-          cuisine: "Other",
-          category: guessCategory(food.name),
-          source: "custom",
-          nutrients: {
-            kcal: food.kcalPer100g,
-            protein: 0,
-            carbs: 0,
-            fat: 0,
-            fiber: 0,
-            sugar: 0,
-            sodium: 0,
-          },
-          servings: [],
-        });
-        await logFood({
-          food: created,
-          quantityG: food.grams,
-          mealType: meal,
-        });
-      }
-      onPersist();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <div className="sheet-head">
-        <div>
-          <h2>{t("add.chatTitle")}</h2>
-          <p className="sheet-caption">{t("add.chatHint")}</p>
-        </div>
-      </div>
-
-      <div className="chat-log" ref={logRef}>
-        {messages.length === 0 && !busy ? (
-          <p className="sheet-caption">{t("add.chatEmpty")}</p>
-        ) : null}
-        {messages.map((message, index) => (
-          <p
-            key={index}
-            className={`chat-msg ${message.role === "user" ? "chat-user" : "chat-ai"}`}
-          >
-            <span className="chat-who">
-              {t(message.role === "user" ? "add.chatYou" : "add.chatAi")}
-            </span>
-            {message.text}
-          </p>
-        ))}
-        {busy ? (
-          <p className="chat-msg chat-ai">
-            <span className="chat-who">{t("add.chatAi")}</span>
-            {t("add.chatThinking")}
-          </p>
-        ) : null}
-      </div>
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      {foods.length ? (
-        <>
-          <div className="voice-list">
-            {foods.map((food, index) => (
-              <div className="voice-item" key={food.name}>
-                <span className="voice-item-name">
-                  {food.name}
-                  <small className="mono muted">
-                    {" "}
-                    · {round(food.grams, 0)} {t("common.g")} ·{" "}
-                    {round(food.kcalPer100g, 0)} {t("common.per100gShort")}
-                  </small>
-                </span>
-                <span className="mono">
-                  {round((food.kcalPer100g * food.grams) / 100, 0)}{" "}
-                  {t("common.kcal")}
-                </span>
-                <button
-                  type="button"
-                  className="icon-btn press"
-                  aria-label={`${t("add.remove")} ${index + 1}`}
-                  onClick={() =>
-                    setFoods((current) =>
-                      current.filter((entry) => entry.name !== food.name),
-                    )
-                  }
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="chip-row">
-            {MEALS.map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={`chip ${meal === item ? "active" : ""}`}
-                onClick={() => onMeal(item)}
-              >
-                {t(`meals.${item}`)}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="btn btn-primary btn-block press"
-            onClick={() => void save()}
-            disabled={saving}
-          >
-            {saving
-              ? t("common.saving")
-              : t("add.logAllTo", {
-                  count: foods.length,
-                  meal: t(`meals.${meal}`),
-                })}
-          </button>
-        </>
-      ) : null}
-
-      <div className="chat-input">
-        <input
-          type="text"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void send();
-          }}
-          placeholder={t("add.chatPlaceholder")}
-          aria-label={t("add.chatPlaceholder")}
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          className="btn btn-primary press chat-send"
-          onClick={() => void send()}
-          disabled={busy || !draft.trim()}
-        >
-          {t("add.chatSend")}
-        </button>
-      </div>
-    </>
-  );
-}
-
-/* ---------------------------------- voice ---------------------------------- */
-
-/* Cheap local heuristic so parsed foods land with a sane category chip;
-   the AI endpoint may later return its own category per food. */
-function guessCategory(name: string): FoodCategory {
-  const lower = name.toLowerCase();
-  const table: Array<[RegExp, FoodCategory]> = [
-    [/milk|curd|yogurt|buttermilk|lassi|paneer|cheese/, "dairy"],
-    [/ghee|butter|oil/, "oils"],
-    [/dal|lentil|bean|chicken|egg|fish|meat|mutton|prawn|tofu|soy/, "protein"],
-    [/tea|coffee|juice|soda|water|shake|smoothie/, "drinks"],
-    [/sugar|sweet|jaggery|halwa|dessert|cake|gulab|jalebi/, "sweets"],
-    [/rice|roti|bread|chapati|wheat|oat|pasta|noodle|idli|dosa|poha|upma/, "grains"],
-    [/veg|curry|sabzi|salad|pickle|sambar|rasam|soup/, "vegetables"],
-  ];
-  for (const [pattern, category] of table) {
-    if (pattern.test(lower)) return category;
-  }
-  return "grains";
-}
-
-function languageLocale(language: string): string {
-  if (language === "ta") return "ta-IN";
-  if (language === "zh") return "zh-CN";
-  return "en-IN";
-}
-
-function VoicePanel({
-  meal,
-  onMeal,
-  onSeedQuick,
-  onPersist,
-}: {
-  meal: MealType;
-  onMeal: (meal: MealType) => void;
-  onSeedQuick: (rows: QuickRow[]) => void;
-  onPersist: () => void;
-}) {
-  const { t, language } = useTranslation();
-  const supported = useMemo(() => speechSupported(), []);
-  const [recording, setRecording] = useState(false);
-  const [heard, setHeard] = useState("");
-  const [interim, setInterim] = useState("");
-  const [typed, setTyped] = useState("");
-  const [parsing, setParsing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<VoiceParseResult | null>(null);
-  const [saving, setSaving] = useState(false);
-  const handleRef = useRef<RecognizerHandle | null>(null);
-
-  function toggleMic() {
-    if (recording) {
-      handleRef.current?.stop();
-      handleRef.current = null;
-      return;
-    }
-    setError(null);
-    setResult(null);
-    const handle = startListening({
-      language: languageLocale(language),
-      onText: (finalText, interimText) => {
-        setHeard(finalText);
-        setInterim(interimText);
-      },
-      onDone: (finalText) => {
-        setRecording(false);
-        setInterim("");
-        if (finalText) void runParse(finalText);
-      },
-      onError: () => {
-        setRecording(false);
-        setInterim("");
-        setError(t("add.voiceMicError"));
-      },
-    });
-    if (!handle) {
-      setError(t("add.voiceUnsupported"));
-      return;
-    }
-    handleRef.current = handle;
-    setRecording(true);
-  }
-
-  async function runParse(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || parsing) return;
-    setParsing(true);
-    setError(null);
-    setResult(null);
-    try {
-      const parsed = await parseVoice(trimmed, {
-        mealType: meal,
-        language,
-      });
-      if (parsed.meal) onMeal(parsed.meal);
-      setResult(parsed);
-    } catch {
-      setError(t("add.voiceFailed"));
-    } finally {
-      setParsing(false);
-    }
-  }
-
-  function toMealList() {
-    if (!result) return;
-    onSeedQuick(
-      result.foods.map((food) => ({
-        ...newQuickRow(),
-        name: food.name,
-        kcal100: String(Math.round(food.kcalPer100g)),
-        amount: String(Math.round(food.grams)),
-        unit: "g" as const,
-        category: guessCategory(food.name),
-      })),
-    );
-  }
-
-  async function saveParsed() {
-    if (!result || saving) return;
-    setSaving(true);
-    try {
-      for (const food of result.foods) {
-        const created = await createFood({
-          name: food.name,
-          cuisine: "Other",
-          category: guessCategory(food.name),
-          source: "custom",
-          nutrients: {
-            kcal: food.kcalPer100g,
-            protein: 0,
-            carbs: 0,
-            fat: 0,
-            fiber: 0,
-            sugar: 0,
-            sodium: 0,
-          },
-          servings: [],
-        });
-        await logFood({
-          food: created,
-          quantityG: food.grams,
-          mealType: meal,
-        });
-      }
-      onPersist();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSaving(false);
-    }
-  }
-
-  const live = heard || interim || typed;
-
-  return (
-    <>
-      <div className="sheet-head">
-        <div>
-          <h2>{t("add.voiceTitle")}</h2>
-          <p className="sheet-caption">{t("add.voiceHint")}</p>
-        </div>
-      </div>
-
-      {supported ? (
-        <button
-          type="button"
-          className={`btn btn-primary btn-block press`}
-          onClick={toggleMic}
-          disabled={parsing}
-        >
-          {parsing
-            ? t("add.voiceParsing")
-            : recording
-              ? t("add.voiceStop")
-              : t("add.voiceStart")}
-        </button>
-      ) : (
-        <p className="sheet-caption">{t("add.voiceUnsupported")}</p>
-      )}
-
-      <div
-        className={`voice-live ${recording ? "live" : ""}`}
-        aria-live="polite"
-      >
-        {recording ? <span className="voice-state">{t("add.voiceState")}</span> : null}
-        <p className={live ? "" : "sheet-caption"}>
-          {live ? (
-            <>
-              {heard || typed || ""}
-              {interim ? <span className="muted"> {interim}</span> : null}
-            </>
-          ) : (
-            t("add.voiceHeardEmpty")
-          )}
-        </p>
-      </div>
-
-      <div className="voice-type">
-        <input
-          type="text"
-          value={typed}
-          onChange={(event) => setTyped(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void runParse(heard || typed);
-          }}
-          placeholder={t("add.voiceTypeHint")}
-          aria-label={t("add.voiceTypeHint")}
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => void runParse(heard || typed)}
-          disabled={parsing || !(heard || typed).trim()}
-        >
-          {t("add.voiceParse")}
-        </button>
-      </div>
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      {result ? (
-        <>
-          <div className="voice-list">
-            {result.foods.map((food) => {
-              const kcal = (food.kcalPer100g * food.grams) / 100;
-              return (
-                <div className="voice-item" key={food.name}>
-                  <span className="voice-item-name">
-                    {food.name}
-                    <small className="mono muted">
-                      {" "}
-                      · {round(food.grams, 0)} {t("common.g")} ·{" "}
-                      {round(food.kcalPer100g, 0)} {t("common.per100gShort")}
-                    </small>
-                  </span>
-                  <span className="mono">
-                    {round(kcal, 0)} {t("common.kcal")}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="chip-row">
-            {MEALS.map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={`chip ${meal === item ? "active" : ""}`}
-                onClick={() => onMeal(item)}
-              >
-                {t(`meals.${item}`)}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="btn btn-primary btn-block press"
-            onClick={() => void saveParsed()}
-            disabled={saving}
-          >
-            {saving
-              ? t("common.saving")
-              : t("add.logAllTo", {
-                  count: result.foods.length,
-                  meal: t(`meals.${meal}`),
-                })}
-          </button>
-
-          <button
-            type="button"
-            className="link-btn"
-            onClick={toMealList}
-          >
-            {t("add.voiceReview")}
-          </button>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 /* -------------------------------- meal list -------------------------------- */
 
 type QuickUnit = "g" | "kg" | "oz";
@@ -1887,19 +1287,15 @@ function newQuickRow(): QuickRow {
 
 function QuickListPanel({
   meal,
-  seedRows,
   onMeal,
   onPersist,
 }: {
   meal: MealType;
-  seedRows?: QuickRow[] | null;
   onMeal: (meal: MealType) => void;
   onPersist: () => void;
 }) {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<QuickRow[]>(() =>
-    seedRows && seedRows.length ? seedRows : [newQuickRow()],
-  );
+  const [rows, setRows] = useState<QuickRow[]>(() => [newQuickRow()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

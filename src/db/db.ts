@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type {
+  AssistantMessage,
   FoodAlias,
   FoodItem,
   LogEntry,
@@ -13,6 +14,7 @@ export class CalorieDatabase extends Dexie {
   aliases!: Table<FoodAlias, number>;
   servings!: Table<ServingUnit, number>;
   logs!: Table<LogEntry, number>;
+  assistant!: Table<AssistantMessage, number>;
 
   constructor() {
     super("calorie-counter");
@@ -22,6 +24,10 @@ export class CalorieDatabase extends Dexie {
       aliases: "++id, foodId, name, language",
       servings: "++id, foodId, unitName",
       logs: "++id, foodId, loggedAt, mealType, category, cuisine",
+    });
+    /* v2: assistant-page transcript store (additive, no data rewrite) */
+    this.version(2).stores({
+      assistant: "++id, kind, createdAt",
     });
   }
 }

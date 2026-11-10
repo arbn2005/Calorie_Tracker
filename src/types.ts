@@ -84,17 +84,26 @@ export interface LogEntry extends Nutrients {
   loggedAt: number;
 }
 
+/** Assistant-page transcript entry, persisted so it survives reloads. */
+export interface AssistantMessage {
+  id?: number;
+  kind: "user" | "assistant";
+  text: string;
+  action?: "add" | "query" | "chat";
+  createdAt: number;
+  edited?: boolean;
+}
+
 export interface FoodWithMeta extends FoodItem {
   aliases: string[];
   servings: ServingUnit[];
 }
 
-export interface NutritionTargets extends Nutrients {
-  bmr: number;
+export interface NutritionTargets extends Nutrients {  bmr: number;
   tdee: number;
 }
 
-export type ScreenName = "today" | "trends" | "settings";
+export type ScreenName = "today" | "assistant" | "trends" | "settings";
 
 export interface SeedFood {
   id: string;

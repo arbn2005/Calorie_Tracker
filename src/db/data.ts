@@ -2,6 +2,7 @@ import { MAX_UNLOGGED_SCANNED, SEED_URL } from "../constants";
 import { addDays, startOfDay } from "../lib/date";
 import { detectLanguage, normalizeText, round } from "../lib/utils";
 import type {
+  AssistantMessage,
   FoodAlias,
   FoodCategory,
   FoodItem,
@@ -486,6 +487,81 @@ export async function getLogsForDays(days: number): Promise<LogEntry[]> {
 
 export async function getAllLogs(): Promise<LogEntry[]> {
   return db.logs.orderBy("loggedAt").toArray();
+}
+
+/* ------------------------------ assistant -------------------------------- */
+
+export async function getAssistantThread(limit = 60): Promise<AssistantMessage[]> {
+  const all = await db.assistant.orderBy("createdAt").toArray();
+  return all.slice(-limit);
+}
+
+export async function saveAssistantMessage(
+  kind: AssistantMessage["kind"],
+  text: string,
+  action?: AssistantMessage["action"],
+): Promise<AssistantMessage> {
+  const message: AssistantMessage = {
+    kind,
+    text,
+    action,
+    createdAt: Date.now(),
+  };
+  const id = await db.assistant.add(message);
+  return { ...message, id };
+}
+
+export async function updateAssistantMessage(
+  id: number,
+  text: string,
+): Promise<void> {
+  await db.assistant.update(id, { text, edited: true });
+}
+
+export async function clearAssistantThread(): Promise<void> {
+  await db.assistant.clear();
+}
+
+export interface UsageSummary {
+  days: number;
+  daysLogged: number;
+  kcalTotal: number;
+  avgKcal: number;
+  topFoods: Array<{ name: string; kcal: number }>;
+}
+
+/** Totals for a window ending `startOffset` days before today. */
+export async function getUsageSummary(
+  days: number,
+  startOffset = 0,
+): Promise<UsageSummary> {
+  const today = startOfDay(Date.now());
+  const start = startOfDay(addDays(today, -startOffset - (days - 1)));
+  const end = startOfDay(addDays(today, -startOffset + 1));
+  const logs = await db.logs
+    .where("loggedAt")
+    .between(start, end, true, false)
+    .toArray();
+
+  const kcalTotal = logs.reduce((sum, entry) => sum + entry.kcal, 0);
+  const byDay = new Set<number>();
+  const byFood = new Map<string, number>();
+  for (const entry of logs) {
+    byDay.add(Math.floor(entry.loggedAt / 86400000));
+    byFood.set(entry.foodName, (byFood.get(entry.foodName) ?? 0) + entry.kcal);
+  }
+  const topFoods = [...byFood.entries()]
+    .map(([name, kcal]) => ({ name, kcal }))
+    .sort((a, b) => b.kcal - a.kcal)
+    .slice(0, 3);
+
+  return {
+    days,
+    daysLogged: byDay.size,
+    kcalTotal,
+    avgKcal: byDay.size > 0 ? kcalTotal / byDay.size : 0,
+    topFoods,
+  };
 }
 
 export async function findFoodByBarcode(

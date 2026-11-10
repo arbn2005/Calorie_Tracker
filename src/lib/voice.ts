@@ -1,24 +1,21 @@
-import type { MealType } from "../types";
+import type { FoodCategory, MealType } from "../types";
 
 /* ------------------------------------------------------------------ */
-/*  AI food parser — plain English in, named + weighed foods out.      */
+/*  Assistant command layer — plain English in, actions out.           */
 /*                                                                     */
-/*  Primary provider: Google Gemini (generativelanguage.googleapis).   */
-/*  Config, all in .env.local (gitignored, never committed):           */
+/*  Google Gemini (generativelanguage.googleapis).  Config in          */
+/*  .env.local (gitignored, never committed):                          */
 /*    VITE_VOICE_API_KEY  Google AI Studio key (required)              */
-/*    VITE_AI_MODEL       defaults to gemini-2.5-flash                 */
-/*    VITE_VOICE_API_URL  optional custom endpoint implementing the    */
-/*                        original contract (see customParse below)    */
+/*    VITE_AI_MODEL       optional model override                      */
 /*                                                                     */
-/*  The Gemini requests carry the google_search tool, so the model     */
-/*  can look foods up on the internet when its own knowledge is        */
-/*  thin (regional dishes, branded products, etc.).                    */
+/*  Requests carry the google_search tool, so the model can look       */
+/*  foods up on the internet when its own knowledge is thin            */
+/*  (regional dishes, branded products, etc.).                         */
 /* ------------------------------------------------------------------ */
 
 const API_KEY = (import.meta.env.VITE_VOICE_API_KEY as string | undefined) ?? "";
 const CONFIGURED_MODEL =
   (import.meta.env.VITE_AI_MODEL as string | undefined) ?? "";
-const ENDPOINT = (import.meta.env.VITE_VOICE_API_URL as string | undefined) ?? "";
 
 /* gemini-3.8-flash: current flagship flash with google_search grounding.
    gemma-4-31b-it: free-tier-friendly fallback (no grounding; estimates
@@ -49,41 +46,134 @@ export interface ParsedFood {
   grams: number;
 }
 
-export interface VoiceParseResult {
-  meal?: MealType;
-  foods: ParsedFood[];
-}
-
-export interface ChatTurnResult {
-  reply: string;
-  meal?: MealType;
-  foods: ParsedFood[];
-}
-
 export interface ChatMessage {
   role: "user" | "ai";
   text: string;
 }
 
-const PARSE_SYSTEM = [
-  "You convert plain-language meal descriptions into structured food entries for a calorie tracker.",
-  "Identify every distinct food or drink the user ate, and estimate:",
-  "- grams consumed (convert servings: 1 cup cooked rice ~158 g, 1 roti ~40 g, 1 cup milk ~240 ml, 1 bowl dal ~150-200 g, 1 idli ~40 g, 1 dosa ~120 g, 1 biscuit ~12 g; treat ml as grams for drinks)",
-  "- kcal per 100 g of that food",
-  "Use your nutrition knowledge, and search the internet when uncertain, especially for regional / Indian dishes and branded packaged foods.",
-  "If the user mentions their meal (lunch etc.) and no meal is provided in the context, set meal to breakfast|lunch|dinner|snacks from what they say; otherwise omit it.",
+const CMD_SYSTEM = [
+  "You are the command layer of a calorie tracker assistant. The user speaks or types commands; classify each user message into exactly one action.",
+  'ACTION "add": the user described food(s) to log into a meal. Extract every food with: name; kcalPer100g (search the web when unsure, especially regional / Indian dishes and branded foods); grams (best estimate of what was eaten); portionName and portionGrams when the food is countable or standardised (e.g. "1 chapati" about 40 g, "1 idli" about 40 g, "1 cup milk" 240 g); needsQuantity true when the user did not clearly state how much (then still fill grams with your best guess so it can be confirmed); assumption text for every default you adopted (e.g. "assumed plain atta chapati with a little ghee", "assumed tea with whole milk and sugar"). If the quantity is missing, the app will ask the user — mention it briefly in reply.',
+  'ACTION "query": the user asks about tracked data, history, trends or totals. Set period.days (7 for a week, 30 for a month, 1 for today, 2 for "yesterday and today" ...) and period.startOffset (how many days before today the period begins; 0 when the period includes today, 1 for "yesterday", 7 for "last week"). reply is one short line describing what you will show.',
+  'ACTION "chat": anything else; reply briefly and helpfully, no foods.',
+  'For "add", set meal to breakfast|lunch|dinner|snacks when the user mentions one; omit meal when they do not (the app will ask).',
   "Respond with ONLY a JSON object, no prose, no markdown fences:",
-  '{"meal":"lunch","foods":[{"name":"Rice","kcalPer100g":130,"grams":300}]}',
+  '{"action":"add","reply":"Adding 2 chapatis — need the rice amount.","meal":"lunch","foods":[{"name":"Chapati","kcalPer100g":300,"grams":80,"portionName":"1 chapati","portionGrams":40,"needsQuantity":false,"assumption":"assumed plain atta chapati with a little ghee"}],"period":{"days":30,"startOffset":0}}',
 ].join("\n");
 
-const CHAT_SYSTEM = [
-  "You are the chat assistant inside a calorie tracker app. The user describes what they are eating, conversationally.",
-  "For every user message: 1) extract newly added foods exactly like a nutrition parser (estimate grams and kcal per 100 g; search the internet when uncertain, especially for regional / Indian dishes and branded foods), 2) reply briefly and warmly (one or two sentences) confirming what you recorded with rough calories.",
-  "foods must contain ONLY the items newly added in the user's latest message, not a running list. If the message adds no foods (small talk, questions), return an empty foods array.",
-  "If the user mentions which meal it is, set meal to breakfast|lunch|dinner|snacks.",
-  "Respond with ONLY a JSON object, no prose, no markdown fences:",
-  '{"reply":"Got it — 2 rotis (~80 g, ~240 kcal) recorded.","meal":"dinner","foods":[{"name":"Roti","kcalPer100g":297,"grams":80}]}',
-].join("\n");
+/* ------------------------------------------------------------------ */
+/*  Command layer                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface AssistantFood {
+  name: string;
+  kcalPer100g: number;
+  grams: number;
+  portionName?: string;
+  portionGrams?: number;
+  needsQuantity?: boolean;
+  assumption?: string;
+}
+
+export interface AssistantPeriod {
+  days: number;
+  startOffset: number;
+}
+
+export interface AssistantResult {
+  action: "add" | "query" | "chat";
+  reply: string;
+  meal?: MealType;
+  foods: AssistantFood[];
+  period?: AssistantPeriod;
+}
+
+function normalizeAssistantFood(raw: unknown): AssistantFood | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const entry = raw as Record<string, unknown>;
+  /* unlike normalizeFood, zero grams is tolerated: those rows are the
+     ones the UI prompts the user for an amount */
+  const name =
+    typeof entry.name === "string"
+      ? entry.name.trim()
+      : typeof entry.food === "string"
+        ? (entry.food as string).trim()
+        : "";
+  const kcal = asNumber(entry.kcalPer100g) || asNumber(entry.kcal_per_100g) || asNumber(entry.kcal100);
+  if (!name || !(kcal > 0)) return null;
+  const gramsRaw = asNumber(entry.grams) || asNumber(entry.amount_g) || asNumber(entry.quantity_g);
+  const food: AssistantFood = {
+    name,
+    kcalPer100g: kcal,
+    grams: Math.max(0, gramsRaw || 0),
+  };
+  if (typeof entry.portionName === "string" && entry.portionName.trim()) {
+    food.portionName = entry.portionName.trim();
+  }
+  const portionGrams = asNumber(entry.portionGrams);
+  if (portionGrams > 0) food.portionGrams = portionGrams;
+  if (food.grams <= 0 || entry.needsQuantity === true) {
+    food.needsQuantity = true;
+  }
+  if (typeof entry.assumption === "string" && entry.assumption.trim()) {
+    food.assumption = entry.assumption.trim();
+  }
+  return food;
+}
+
+function normalizePeriod(data: Record<string, unknown>): AssistantPeriod | undefined {
+  const raw = data.period;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const entry = raw as Record<string, unknown>;
+  const days = asNumber(entry.days);
+  if (!(days > 0)) return undefined;
+  const startOffset = Math.max(0, asNumber(entry.startOffset) || 0);
+  return { days: Math.min(365, Math.round(days)), startOffset };
+}
+
+/** Conversational command turn → classified action for the UI to run. */
+export async function assistantTurn(
+  history: ChatMessage[],
+  options: { mealType?: MealType; language?: string; signal?: AbortSignal } = {},
+): Promise<AssistantResult> {
+  if (!history.length) throw new Error("no messages");
+  const seeded: ChatMessage[] = [
+    {
+      role: "ai",
+      text: `Context: current meal slot ${options.mealType ?? "unknown"}, user language ${options.language ?? "en"}.`,
+    },
+    ...history,
+  ];
+  const data = await geminiJson(CMD_SYSTEM, seeded, options.signal);
+  const action =
+    data.action === "add" || data.action === "query"
+      ? data.action
+      : "chat";
+  const foods =
+    action === "add"
+      ? (Array.isArray((data as Record<string, unknown>).foods)
+          ? ((data as Record<string, unknown>).foods as unknown[])
+          : []
+        )
+          .map(normalizeAssistantFood)
+          .filter((food): food is AssistantFood => food !== null)
+      : [];
+  const result: AssistantResult = {
+    action,
+    reply:
+      typeof data.reply === "string" && data.reply.trim()
+        ? data.reply.trim()
+        : action === "add"
+          ? `Parsed ${foods.length} food${foods.length === 1 ? "" : "s"}.`
+          : "",
+    foods,
+  };
+  const meal = parseMeals(data);
+  if (meal) result.meal = meal;
+  const period = normalizePeriod(data);
+  if (period) result.period = period;
+  return result;
+}
 
 /* --- generic JSON extraction: models may chatter before the answer ---
    Scan for balanced top-level {...} objects (string-aware), then parse
@@ -149,44 +239,11 @@ function asNumber(value: unknown): number {
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : NaN;
 }
 
-function normalizeFood(raw: unknown): ParsedFood | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const entry = raw as Record<string, unknown>;
-  const name =
-    typeof entry.name === "string"
-      ? entry.name.trim()
-      : typeof entry.food === "string"
-        ? (entry.food as string).trim()
-        : "";
-  if (!name) return null;
-  const kcal =
-    asNumber(entry.kcalPer100g) ||
-    asNumber(entry.kcal_per_100g) ||
-    asNumber(entry.kcal100);
-  const grams =
-    asNumber(entry.grams) ||
-    asNumber(entry.amount_g) ||
-    asNumber(entry.quantity_g);
-  if (!(kcal > 0) || !(grams > 0)) return null;
-  return { name, kcalPer100g: kcal, grams };
-}
-
 function parseMeals(data: Record<string, unknown>): MealType | undefined {
   return typeof data.meal === "string" &&
     MEAL_KEYS.includes(data.meal as MealType)
     ? (data.meal as MealType)
     : undefined;
-}
-
-function parseFoods(data: Record<string, unknown>): ParsedFood[] {
-  const list = Array.isArray(data.foods)
-    ? data.foods
-    : Array.isArray((data as Record<string, unknown>).items)
-      ? ((data as Record<string, unknown>).items as unknown[])
-      : [];
-  return list
-    .map(normalizeFood)
-    .filter((food): food is ParsedFood => food !== null);
 }
 
 /* --- Gemini --- */
@@ -318,93 +375,23 @@ async function geminiCall(
 
 /* --- custom endpoint (optional escape hatch) --- */
 
-async function customJson(
-  body: unknown,
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`AI ${response.status}`);
-    return (await response.json()) as Record<string, unknown>;
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
-
-function usingGemini(): boolean {
-  return Boolean(API_KEY) && !ENDPOINT.trim();
-}
-
-/* --- public API --- */
-
-/** One-shot: turn a description into foods (used by the voice panel). */
-export async function parseVoice(
-  text: string,
-  options: { mealType?: MealType; language?: string; signal?: AbortSignal } = {},
-): Promise<VoiceParseResult> {
-  const input = [
-    `Current meal slot if not stated: ${options.mealType ?? "unknown"}.`,
-    `User language: ${options.language ?? "en"}.`,
-    `Description: ${text}`,
-  ].join("\n");
-  const data = usingGemini()
-    ? await geminiJson(PARSE_SYSTEM, [{ role: "user", text: input }], options.signal)
-    : await customJson(
-        { text, mealType: options.mealType, language: options.language },
-        options.signal,
-      );
-  const result: VoiceParseResult = { foods: parseFoods(data) };
-  const meal = parseMeals(data);
-  if (meal) result.meal = meal;
-  if (!result.foods.length) throw new Error("AI returned no usable foods");
-  return result;
-}
-
-/** Conversational turn: reply text + any foods the user just added. */
-export async function chatTurn(
-  history: ChatMessage[],
-  options: { mealType?: MealType; language?: string; signal?: AbortSignal } = {},
-): Promise<ChatTurnResult> {
-  if (!history.length) throw new Error("no messages");
-  const last = history[history.length - 1];
-  const seeded: ChatMessage[] = [
-    {
-      role: "ai",
-      text: `Context: current meal slot is ${options.mealType ?? "unknown"}, user language ${options.language ?? "en"}.`,
-    },
-    ...history,
+/* Cheap local heuristic so logged foods land with a sane category
+   chip; the AI may later return its own category per food. */
+export function guessCategory(name: string): FoodCategory {
+  const lower = name.toLowerCase();
+  const table: Array<[RegExp, FoodCategory]> = [
+    [/milk|curd|yogurt|buttermilk|lassi|paneer|cheese/, "dairy"],
+    [/ghee|butter|oil/, "oils"],
+    [/dal|lentil|bean|chicken|egg|fish|meat|mutton|prawn|tofu|soy/, "protein"],
+    [/tea|coffee|juice|soda|water|shake|smoothie/, "drinks"],
+    [/sugar|sweet|jaggery|halwa|dessert|cake|gulab|jalebi/, "sweets"],
+    [/rice|roti|bread|chapati|chappathi|wheat|oat|pasta|noodle|idli|dosa|poha|upma/, "grains"],
+    [/veg|curry|sabzi|salad|pickle|sambar|rasam|soup/, "vegetables"],
   ];
-  const data: Record<string, unknown> = usingGemini()
-    ? await geminiJson(CHAT_SYSTEM, seeded, options.signal)
-    : // Custom endpoints speak the one-shot contract; build a synthetic turn.
-      await customJson(
-        { text: last.text, mealType: options.mealType, language: options.language },
-        options.signal,
-      );
-  const foods = parseFoods(data);
-  const reply =
-    typeof data.reply === "string" && data.reply.trim()
-      ? data.reply.trim()
-      : foods.length
-        ? `Recorded ${foods.length} food${foods.length === 1 ? "" : "s"}.`
-        : "";
-  const turn: ChatTurnResult = { reply, foods };
-  const meal = parseMeals(data);
-  if (meal) turn.meal = meal;
-  return turn;
+  for (const [pattern, category] of table) {
+    if (pattern.test(lower)) return category;
+  }
+  return "grains";
 }
 
 /* ------------------------------------------------------------------ */

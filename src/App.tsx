@@ -9,6 +9,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { TrendScreen } from "./screens/TrendScreen";
 import type { LogEntry, MealType, ScreenName, UserProfile } from "./types";
+import { AssistantScreen } from "./screens/AssistantScreen";
 
 const UNDO_MS = 5000;
 
@@ -88,6 +89,27 @@ export default function App() {
       window.history.back();
     }
     setFlow(null);
+  }, []);
+
+  /* after the assistant logs foods, show the result on Today */
+  const loggedFromAssistant = useCallback(() => {
+    bump();
+    if (pushedEntry.current != null) {
+      pushedEntry.current = null;
+      expectingPop.current = true;
+      window.history.back();
+    }
+    setScreen("today");
+  }, [bump]);
+
+  /* navigating between non-root screens: re-bind the pushed entry via
+     replaceState so the back gesture stays one press → Today */
+  const navigate = useCallback((to: ScreenName) => {
+    if (pushedEntry.current != null) {
+      pushedEntry.current = `screen:${to}`;
+      window.history.replaceState({ calorieUi: `screen:${to}` }, "");
+    }
+    setScreen(to);
   }, []);
 
   useEffect(() => {
@@ -205,9 +227,17 @@ export default function App() {
             refreshKey={version}
             online={online}
             onOpenSettings={() => setScreen("settings")}
+            onOpenAssistant={() => navigate("assistant")}
             onOpenAdd={openAdd}
             onOpenEdit={(entry) => void openEdit(entry)}
             onNotify={showToastState}
+          />
+        ) : null}
+        {screen === "assistant" ? (
+          <AssistantScreen
+            profile={profile}
+            onLogged={loggedFromAssistant}
+            onOpenTrends={() => navigate("trends")}
           />
         ) : null}
         {screen === "trends" ? (
