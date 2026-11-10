@@ -1316,6 +1316,181 @@ a {
   width: 100%;
 }
 
+/* separate voice / chat entry points under the whole-meal CTA */
+.entry-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: var(--s3);
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+}
+
+.entry-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  min-height: 64px;
+  padding: var(--s2);
+  background: none;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.entry-mode + .entry-mode {
+  border-left: var(--rule-thin) solid var(--rule-faint);
+}
+
+.entry-mode:hover {
+  background: var(--surface);
+}
+
+.entry-mode:focus-visible {
+  outline: 2px solid var(--saffron);
+  outline-offset: -2px;
+}
+
+.entry-mode:active {
+  background: var(--paper);
+}
+
+.entry-mode span {
+  font-size: 0.875rem;
+}
+
+/* chat: talk to the food assistant */
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  max-height: 16rem;
+  overflow-y: auto;
+  margin-bottom: var(--s3);
+}
+
+.chat-msg {
+  max-width: 88%;
+  padding: var(--s2) var(--s3);
+  border: var(--rule-thin) solid var(--rule-faint);
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.chat-msg .chat-who {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.chat-user {
+  align-self: flex-end;
+  background: var(--surface);
+}
+
+.chat-ai {
+  align-self: flex-start;
+  border-left: 3px solid var(--saffron);
+}
+
+.chat-input {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: var(--rule-thin) solid var(--rule-faint);
+}
+
+.chat-input input {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-send {
+  min-height: 44px;
+  padding: 8px var(--s3);
+}
+
+/* quick meal list (multi-food entry) */
+.voice-live {
+  border-top: var(--rule-thin) solid var(--rule-faint);
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+  padding: var(--s3) 0;
+  margin: var(--s3) 0;
+  min-height: 4.5rem;
+}
+
+.voice-live p {
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.4;
+}
+
+.voice-state {
+  color: var(--saffron);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: var(--s2);
+  animation: voice-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.voice-type {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin-bottom: var(--s3);
+}
+
+.voice-type input {
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-list {
+  margin-top: var(--s3);
+}
+
+.voice-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: var(--rule-thin) solid var(--rule-faint);
+}
+
+.voice-item-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-item-name small {
+  font-size: 0.75rem;
+}
+
 /* quick meal list (multi-food entry) */
 .quick-list {
   display: flex;
